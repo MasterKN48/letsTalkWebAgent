@@ -10,13 +10,13 @@
 
 | Feature | Details |
 |---|---|
-| 🎙️ Live voice recording | Tap the mic, speak — VAD auto-detects when you've finished |
-| 🧠 On-device STT | Whisper Tiny EN (sherpa-onnx WASM) |
-| 🤖 On-device LLM translation | LFM2 350M (llama.cpp WASM, Liquid AI) |
-| 🔊 On-device TTS | Piper TTS EN Lessac (sherpa-onnx WASM) |
-| 🌍 Language selector | Source + Target language (8 languages) |
-| 🎭 Voice clone toggle | UI ready (pipeline hook available) |
-| 📊 Live metrics | Real latency, accuracy, words/sec from each turn |
+| 🎙️ Live voice recording | Silero VAD detects when you start and stop speaking |
+| 👂 On-device STT | Whisper Tiny (Transformers.js v3 WASM/WebGPU) |
+| 🧠 On-device Translation | OPUS-MT (Transformers.js v3 WASM) |
+| 🔊 On-device TTS | Chatterbox (Transformers.js v3 WebGPU/WASM) |
+| 🌍 Language selector | English, Hindi, Spanish, French, German (vice-versa) |
+| 🎭 Voice clone | Enable cloning via speaker embeddings |
+| 📊 Live metrics | Real-time latency tracking for each stage |
 | 🌙 Dark / Light mode | System-aware toggle |
 | 📱 PWA | Installable on mobile & desktop |
 | ⚡ Vite + Bun | Sub-200ms builds, fast HMR |
@@ -29,22 +29,19 @@
 User speaks
     │
     ▼
-AudioCapture (16 kHz mic)
+Audio Processing (vad-web + Silero VAD)
     │
     ▼
-VAD — Silero VAD v5 (detects speech end)
-    │   ← popSpeechSegment()
-    ▼
-VoicePipeline.processTurn(audioSamples)
+Waterfall Pipeline (src/worker.js)
     │
-    ├── STT  ——→ Whisper Tiny EN  ——→ transcript text
+    ├── STT  ——→ Whisper Tiny ——→ transcript text
     │
-    ├── LLM  ——→ LFM2 350M        ——→ translation (streamed token by token)
+    ├── Brain ——→ OPUS-MT ——→ translation 
     │
-    └── TTS  ——→ Piper EN Lessac  ——→ Float32Array audio → AudioPlayback
+    └── Voice ——→ Chatterbox  ——→ synthesized audio (with cloning)
 ```
 
-All 4 models run in-browser using WebAssembly (llama.cpp + sherpa-onnx). **Zero network calls after the one-time model download.**
+All models run in-browser using **Transformers.js v3**. The pipeline is sequential ("Waterfall") to maximize speed and minimize memory footprint. Voice cloning is achieved by passing the original speaker's embeddings to the TTS model.
 
 ---
 
@@ -70,7 +67,7 @@ bun run dev
 
 Open **http://localhost:5173** and tap the microphone button.
 
-> ⚠️ **First run**: The app will download ~425 MB of AI models (VAD 5MB + STT 105MB + LLM 250MB + TTS 65MB). These are stored permanently in your browser's OPFS — subsequent starts load instantly from cache.
+> ⚠️ **First run**: The app will download ~800 MB of AI models. These are cached in your browser's Cache Storage or OPFS (configurable via `.env`) for instant subsequent loads. WebGPU is highly recommended for real-time TTS performance.
 
 ---
 
@@ -78,27 +75,21 @@ Open **http://localhost:5173** and tap the microphone button.
 
 ```
 WebVoiceAgent/
-├── public/                  # Static assets (favicon, PWA icons)
+├── public/                  # PWA icons & manifest
 ├── src/
 │   ├── components/          # Reusable UI components
-│   │   ├── Header.jsx       # App bar, theme, and status
-│   │   ├── RecordingHub.jsx # Mic & Upload interaction center
-│   │   ├── ConfigPanel.jsx  # Language & download settings
-│   │   ├── SourceTranscript.jsx # User speech transcription
-│   │   ├── TranslatedAudio.jsx # Translation playback & text
-│   │   ├── MetricsDisplay.jsx # Latency & speed metrics
-│   │   └── CustomAudioPlayer.jsx # Premium player with progress
-│   ├── utils/               # Logic helpers
-│   │   ├── audio.js         # WAV encoding utilities
-│   │   └── time.js          # Timestamp formatting
-│   ├── App.jsx              # Main orchestrator (state & pipeline)
-│   ├── runanywhere.js       # SDK init & model registration
-│   ├── constants.js         # Language lists & stage labels
-│   ├── index.css            # Tailwind + custom brand styles
+│   ├── store/
+│   │   └── useVoiceStore.js # Zustand state management
+│   ├── utils/
+│   │   ├── audio.js         # WAV encoding
+│   │   └── audioProcessor.js # VAD & audio chunking logic
+│   ├── App.jsx              # UI orchestrator
+│   ├── worker.js            # Sequential AI pipeline (Transformers.js)
+│   ├── constants.js         # Supported languages & labels
+│   ├── index.css            # Styles & Brand tokens
 │   └── main.jsx             # React entry point
-├── .env                     # Model IDs & LLM settings
-├── vite.config.js           # Vite + PWA + WASM config
-└── RunanywhereGuide.md      # SDK reference docs
+├── .env                     # Model IDs & Storage settings
+└── vite.config.js           # Vite + PWA + Worker config
 ```
 
 ---
@@ -108,15 +99,15 @@ WebVoiceAgent/
 All model IDs and LLM settings live in `.env`. Change these to swap models without touching code.
 
 ```env
-# RunAnywhere Model IDs
-VITE_MODEL_LLM_ID=lfm2-350m-q4_k_m
-VITE_MODEL_STT_ID=sherpa-onnx-whisper-tiny.en
-VITE_MODEL_TTS_ID=vits-piper-en_US-lessac-medium
-VITE_MODEL_VAD_ID=silero-vad-v5
+# Transformers.js Model IDs
+VITE_MODEL_VAD_ID=huggingworld/silero-vad
+VITE_MODEL_STT_ID=Xenova/whisper-tiny
+VITE_MODEL_TTS_ID=onnx-community/chatterbox-multilingual-ONNX
+VITE_TRANSLATION_PREFIX=Xenova/opus-mt
 
-# LLM generation settings
-VITE_LLM_MAX_TOKENS=80
-VITE_LLM_TEMPERATURE=0.7
+# Storage Backend
+VITE_USE_CACHE=true
+VITE_USE_OPFS=false
 ```
 
 ### Swapping Models
@@ -255,13 +246,12 @@ The `dist/` folder is a self-contained static site. Deploy it anywhere that supp
 
 | Package | Purpose |
 |---|---|
-| `react` + `react-dom` | UI framework |
-| `@runanywhere/web` | Core SDK — RunAnywhere, ModelManager, VoicePipeline, AudioCapture, EventBus |
-| `@runanywhere/web-llamacpp` | LLM/VLM backend — llama.cpp compiled to WASM |
-| `@runanywhere/web-onnx` | STT/TTS/VAD backend — sherpa-onnx compiled to WASM |
-| `vite` | Build tool |
-| `vite-plugin-pwa` | Progressive Web App support |
-| `tailwindcss` | Styling |
+| `react` | UI framework |
+| `@huggingface/transformers` | AI pipeline (STT, Translation, TTS) |
+| `@ricky0123/vad-web` | Silero VAD implementation |
+| `zustand` | State management |
+| `vite` | Build tool & Dev server |
+| `tailwind-css` | Styling |
 
 ---
 

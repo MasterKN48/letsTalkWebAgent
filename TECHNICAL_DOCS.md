@@ -6,15 +6,13 @@ This document provides a deep dive into the technical architecture, component de
 
 ## 🏗️ Architectural Overview
 
-Let'sTalk.live is built as a highly modular React application that leverages the **RunAnywhere Web SDK** to perform complex AI tasks entirely on the client side.
+Let'sTalk.live is built as a highly modular React application that leverages **Transformers.js (v3)** to perform complex AI tasks entirely on the client side.
 
 ### Core Technologies
-- **React (Vite)**: UI orchestration and state management.
-- **Tailwind CSS**: Modern, responsive styling with dark mode support.
-- **RunAnywhere Web SDK**: High-level API for voice processing.
-- **WASM Backends**: 
-  - `llamacpp`: High-performance LLM execution.
-  - `sherpa-onnx`: Fast STT, TTS, and VAD processing.
+- **React (Vite)**: UI framework.
+- **Zustand**: Centralized state management with DevTools support.
+- **Transformers.js v3**: High-performance AI pipeline (WebGPU/WASM).
+- **vad-web (Silero VAD)**: Real-time voice activity detection.
 
 ---
 
@@ -22,49 +20,43 @@ Let'sTalk.live is built as a highly modular React application that leverages the
 
 The application is decomposed into functional modules located in `src/components/`.
 
-### 1. `App.jsx` (The Orchestrator)
-The central hub for data flow. 
-- **Responsibility**: Manages global UI state (pipeline stage, transcripts, metrics) and initializes the SDK.
-- **Key Logic**: Orchestrates the `processAudioSamples` callback which triggers the sequential STT → LLM → TTS pipeline turn.
+### 1. `App.jsx` (The UI Orchestrator)
+The central hub for UI interaction.
+- **Responsibility**: Manages the Web Worker lifecycle and handles communication between the VAD and the AI pipeline.
+- **Key Logic**: Initializes the `worker.js` and passes configuration via environment variables.
 
-### 2. `RecordingHub.jsx`
-The primary user interaction point.
-- **Props**: Audio levels, pipeline stage, error messages, and action callbacks.
-- **Features**: 
-  - Adaptive microphone ring animation based on volume.
-  - Drag-and-drop / File upload integration.
-  - Informative status labels for every pipeline tick.
+### 2. `src/store/useVoiceStore.js` (State Machine)
+Powered by **Zustand**, this store manages:
+- Pipeline stages (`listening`, `processing`, `speaking`).
+- Transcription history and audio metrics.
+- UI preferences (language, dark mode, voice clone).
 
-### 3. `ConfigPanel.jsx`
-Global settings management.
-- **Responsibility**: Allows users to select languages and toggle voice cloning.
-- **Performance**: Displays real-time download percentages for each model category.
+### 3. `src/worker.js` (The Brain)
+A dedicated Web Worker that runs the sequential "Waterfall" pipeline:
+- **STT**: Whisper Tiny for rapid transcription.
+- **Translation**: OPUS-MT for target language generation.
+- **TTS**: Chatterbox with speaker embedding support for voice cloning.
+- **WebGPU**: Utilized for TTS and STT whenever available for peak performance.
 
-### 4. `SourceTranscript.jsx` & `TranslatedAudio.jsx`
-The feed components.
-- **Source**: Shows raw transcription with a simple play-back for verification.
-- **Translated**: Displays the LLM output (streaming supported) and provides a progress-tracked audio player for the synthesized speech.
-
-### 5. `CustomAudioPlayer.jsx`
-A reusable, premium audio component.
-- **UI**: Includes a seekable progress bar, play/pause controls, and duration display.
-- **Compatibility**: Works with standard browser Blobs generated from the WASM pipeline.
+### 4. `src/utils/audioProcessor.js` (The Ear)
+Uses **Silero VAD** via the `vad-web` library.
+- **Responsibility**: Monitors the microphone stream and identifies speech segments.
+- **Buffering**: Automatically captures audio chunks and triggers the AI pipeline upon speech end.
 
 ---
 
 ## 📡 State Management & Data Flow
 
 ### Pipeline Lifecycle
-The application state follows a strict machine:
-`idle` → `sdk_init` → `downloading` → `loading` → `listening` → `processing` → `generating` → `speaking` → `idle`
+`idle` → `listening` → `processing` → `generating` → `speaking` → `idle`
 
 ### Audio Processing Pipeline
-1. **Capture**: `AudioCapture` collects chunks at 16kHz.
-2. **Detection**: `VAD` (Voice Activity Detection) monitors chunks and triggers `Ended` activity when silence is detected.
-3. **Encoding**: `utils/audio.js` converts raw samples to a WAV Blob for immediate UI feedback.
-4. **Turn Execution**: `VoicePipeline.processTurn` runs the multi-stage AI process.
-5. **Streaming**: LLM tokens are pushed back to the UI in real-time via `onResponseToken`.
-6. **Synthesis**: TTS audio is received as a `Float32Array`, converted to a Blob, and mapped to the corresponding transcript ID.
+1. **Detection**: VAD identifies speech and returns a `Float32Array` of samples.
+2. **Transfer**: Samples are passed to `worker.js`.
+3. **STT**: Whisper converts audio to text.
+4. **Translation**: Text is translated to the target language.
+5. **Synthesis**: TTS generates voice audio.
+6. **Playback**: The main thread receives audio buffers and plays them through the UI.
 
 ---
 
@@ -87,7 +79,10 @@ The application state follows a strict machine:
 ## 🛠️ Implementation Details
 
 ### Model Management
-Models are registered in `runanywhere.js`. The `ensureModelLoaded` utility in `App.jsx` ensures that models are only downloaded if missing and only loaded if not already in memory, optimizing for both speed and resource usage.
+Models are loaded and cached using **Transformers.js** internal mechanisms.
+- **Caching**: Models are stored in the browser's Cache Storage or OPFS based on the `.env` configuration.
+- **Lazy Loading**: Pipelines and models are initialized only when first needed (at the start of the first processing turn) and are kemudian reused for subsequent turns.
+- **Sequential Execution**: The worker ensures that only one pipeline stage (STT, Translation, or TTS) is active at a time to optimize memory usage on lower-end devices.
 
 ### Theme & Styling
 - **Dark Mode**: Managed via a React state synchronized with the `dark` class on the root element.

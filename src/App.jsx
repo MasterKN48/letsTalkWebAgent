@@ -25,17 +25,29 @@ import { AudioProcessor } from "./utils/audioProcessor";
  */
 export default function App() {
   const {
-    darkMode, setDarkMode,
-    sourceLang, setSourceLang,
-    targetLang, setTargetLang,
-    voiceClone, setVoiceClone,
-    stage, setStage,
-    audioLevel, setAudioLevel,
+    darkMode,
+    setDarkMode,
+    sourceLang,
+    setSourceLang,
+    targetLang,
+    setTargetLang,
+    voiceClone,
+    setVoiceClone,
+    stage,
+    setStage,
+    audioLevel,
+    setAudioLevel,
     downloadPct,
-    transcripts, addTranscript, updateTranscript, clearTranscripts,
-    metrics, setMetrics,
-    error, setError,
-    uploadedFileName, setUploadedFileName,
+    transcripts,
+    addTranscript,
+    updateTranscript,
+    clearTranscripts,
+    metrics,
+    setMetrics,
+    error,
+    setError,
+    uploadedFileName,
+    setUploadedFileName,
   } = useVoiceStore();
 
   /* ─── Refs ─────────────────────────────────────────────────── */
@@ -46,7 +58,7 @@ export default function App() {
   const lastTargetIdRef = useRef(null);
 
   /* ─── Effects ────────────────────────────────────────────── */
-  
+
   // Theme management
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -54,21 +66,29 @@ export default function App() {
 
   // Initialize Worker
   useEffect(() => {
-    workerRef.current = new Worker(new URL('./worker.js', import.meta.url), {
-      type: 'module'
+    workerRef.current = new Worker(new URL("./worker.js", import.meta.url), {
+      type: "module",
     });
 
     workerRef.current.onmessage = (e) => {
-      const { type, text, audio, sr, status, error: workerError, totalLatency } = e.data;
-
-      if (type === 'status') {
+      const {
+        type,
+        text,
+        audio,
+        sr,
+        status,
+        error: workerError,
+        totalLatency,
+      } = e.data;
+      console.log("Worker message:", e.data);
+      if (type === "status") {
         setStage(status);
-      } else if (type === 'text_src') {
+      } else if (type === "text_src") {
         const id = lastSourceIdRef.current;
         if (id) {
           updateTranscript(id, { text });
         }
-      } else if (type === 'text_tgt') {
+      } else if (type === "text_tgt") {
         const id = Date.now();
         lastTargetIdRef.current = id;
         addTranscript({
@@ -76,9 +96,9 @@ export default function App() {
           type: "target",
           text,
           time: formatTime(),
-          isStreaming: false
+          isStreaming: false,
         });
-      } else if (type === 'audio') {
+      } else if (type === "audio") {
         const id = lastTargetIdRef.current;
         if (id) {
           const audioBlobUrl = URL.createObjectURL(encodeWAV(audio, sr));
@@ -88,19 +108,27 @@ export default function App() {
           setMetrics({
             latency: `${totalLatency}ms`,
             accuracy: "~98%",
-            speed: `${(metrics.speed)}` // Keep previous or calculate anew
+            speed: `${metrics.speed}`, // Keep previous or calculate anew
           });
         }
-      } else if (type === 'error') {
+      } else if (type === "error") {
+        console.error("Worker error:", workerError);
         setError(workerError);
-        setStage('error');
+        setStage("error");
       }
     };
 
     return () => {
       workerRef.current?.terminate();
     };
-  }, [addTranscript, updateTranscript, setStage, setError, setMetrics, metrics.speed]);
+  }, [
+    addTranscript,
+    updateTranscript,
+    setStage,
+    setError,
+    setMetrics,
+    metrics.speed,
+  ]);
 
   // Initialize Audio Processor
   useEffect(() => {
@@ -114,7 +142,7 @@ export default function App() {
           type: "source",
           text: "...",
           time: formatTime(),
-          audioBlobUrl: null
+          audioBlobUrl: null,
         });
         setStage("recording");
       },
@@ -122,12 +150,12 @@ export default function App() {
         // Send to worker
         setStage("processing");
         workerRef.current.postMessage({
-          type: 'process',
+          type: "process",
           audio,
           src: sourceLang,
-          tgt: targetLang
+          tgt: targetLang,
         });
-        
+
         // Update source transcript with audio blob
         const id = lastSourceIdRef.current;
         if (id) {
@@ -137,13 +165,20 @@ export default function App() {
       },
       onFrameProcessed: (level) => {
         setAudioLevel(level);
-      }
+      },
     });
 
     return () => {
       processorRef.current?.destroy();
     };
-  }, [addTranscript, updateTranscript, setStage, setAudioLevel, sourceLang, targetLang]);
+  }, [
+    addTranscript,
+    updateTranscript,
+    setStage,
+    setAudioLevel,
+    sourceLang,
+    targetLang,
+  ]);
 
   /* ─── Handlers ──────────────────────────────────────────── */
 
@@ -174,9 +209,11 @@ export default function App() {
         setStage("processing");
 
         const arrayBuffer = await file.arrayBuffer();
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)(
+          { sampleRate: 16000 },
+        );
         const decoded = await audioCtx.decodeAudioData(arrayBuffer);
-        const float32 = decoded.getChannelData(0); 
+        const float32 = decoded.getChannelData(0);
         audioCtx.close();
 
         const id = Date.now();
@@ -186,14 +223,14 @@ export default function App() {
           type: "source",
           text: "...",
           time: formatTime(),
-          audioBlobUrl: URL.createObjectURL(file)
+          audioBlobUrl: URL.createObjectURL(file),
         });
 
         workerRef.current.postMessage({
-          type: 'process',
+          type: "process",
           audio: float32,
           src: sourceLang,
-          tgt: targetLang
+          tgt: targetLang,
         });
       } catch (err) {
         console.error("File processing error:", err);
@@ -203,13 +240,22 @@ export default function App() {
       }
       e.target.value = "";
     },
-    [sourceLang, targetLang, addTranscript, setError, setStage, setUploadedFileName]
+    [
+      sourceLang,
+      targetLang,
+      addTranscript,
+      setError,
+      setStage,
+      setUploadedFileName,
+    ],
   );
 
   /* ─── Derived UI Values ─────────────────────────────────── */
   const isActive = stage !== "idle" && stage !== "error";
   const stageInfo = STAGE_LABELS[stage] ?? STAGE_LABELS.idle;
-  const downloadingModelArr = Object.entries(downloadPct).find(([, p]) => p > 0 && p < 100);
+  const downloadingModelArr = Object.entries(downloadPct).find(
+    ([, p]) => p > 0 && p < 100,
+  );
   const downloadLabel = downloadingModelArr
     ? `${downloadingModelArr[0].split("-").slice(-1)[0]}: ${downloadingModelArr[1]}%`
     : null;
@@ -217,16 +263,16 @@ export default function App() {
   /* ─── Render ────────────────────────────────────────────── */
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col items-center max-w-5xl mx-auto transition-colors duration-300 dark:bg-brand-dark-bg">
-      <Header 
-        darkMode={darkMode} 
-        setDarkMode={setDarkMode} 
-        isActive={isActive} 
-        stage={stage} 
+      <Header
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        isActive={isActive}
+        stage={stage}
       />
 
       <main className="w-full flex flex-col gap-8 mt-24">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <ConfigPanel 
+          <ConfigPanel
             sourceLang={sourceLang}
             setSourceLang={setSourceLang}
             targetLang={targetLang}
@@ -237,10 +283,18 @@ export default function App() {
             downloadingModel={downloadingModelArr}
           />
 
-          <RecordingHub 
+          <RecordingHub
             isListening={stage === "listening" || stage === "recording"}
-            ringScale={stage === "listening" || stage === "recording" ? 1 + audioLevel * 0.35 : 1}
-            onMicClick={stage === "idle" || stage === "error" ? startListening : stopListening}
+            ringScale={
+              stage === "listening" || stage === "recording"
+                ? 1 + audioLevel * 0.35
+                : 1
+            }
+            onMicClick={
+              stage === "idle" || stage === "error"
+                ? startListening
+                : stopListening
+            }
             onUploadClick={() => fileInputRef.current?.click()}
             isActive={isActive}
             stageInfo={stageInfo}
@@ -262,10 +316,10 @@ export default function App() {
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <SourceTranscript 
-            transcripts={transcripts} 
-            stage={stage} 
-            onClearAll={clearTranscripts} 
+          <SourceTranscript
+            transcripts={transcripts}
+            stage={stage}
+            onClearAll={clearTranscripts}
           />
           <TranslatedAudio transcripts={transcripts} />
         </div>

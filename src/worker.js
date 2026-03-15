@@ -1,4 +1,10 @@
-import { pipeline, env } from "@huggingface/transformers";
+import {
+  pipeline,
+  env,
+  AutoModel,
+  AutoTokenizer,
+  PretrainedConfig,
+} from "@huggingface/transformers";
 
 const config = {
   STT_ID: import.meta.env.VITE_MODEL_STT_ID,
@@ -12,7 +18,7 @@ const config = {
 env.allowLocalModels = false;
 env.useBrowserCache = config.USE_CACHE;
 
-let stt, translator, tts;
+let stt, translator, ttsModel, ttsTokenizer;
 
 self.onmessage = async (e) => {
   const { type, audio, src, tgt } = e.data;
@@ -25,10 +31,12 @@ self.onmessage = async (e) => {
         status: "processing",
         message: "Transcribing speech...",
       });
+      console.log("Starting STT...", config.STT_ID);
       stt ??= await pipeline("automatic-speech-recognition", config.STT_ID, {
         device: "wasm",
         quantized: true,
       });
+      console.log("STT model loaded.");
 
       const startSTT = Date.now();
       const { text } = await stt(audio, {
@@ -50,12 +58,14 @@ self.onmessage = async (e) => {
         message: "Translating...",
       });
       const modelId = `${config.TRANSLATION_PREFIX}-${src}-${tgt}`;
+      console.log("Loading translator...", modelId);
       if (!translator || translator.model_id !== modelId) {
         translator = await pipeline("translation", modelId, {
           device: "wasm",
           quantized: true,
         });
       }
+      console.log("Translator loaded.");
 
       const startTrans = Date.now();
       const [{ translation_text }] = await translator(text);
@@ -72,28 +82,58 @@ self.onmessage = async (e) => {
         status: "speaking",
         message: "Synthesizing voice...",
       });
-      tts ??= await pipeline("text-to-speech", config.TTS_ID, {
-        dtype: "q4",
-        device: "webgpu",
-      }).catch(() =>
-        pipeline("text-to-speech", config.TTS_ID, {
-          dtype: "q4",
-          device: "wasm",
-        }),
-      );
+
+      if (!ttsModel || !ttsTokenizer) {
+        console.log("Loading TTS model...");
+        // 3. Create a manual config to satisfy the loader
+        const customConfig = new PretrainedConfig({
+          model_type: "llama", // Chatterbox is built on a 0.5B Llama-based architecture
+          is_encoder_decoder: false,
+        });
+        // console.log("Loading TTS model...", customConfig);
+        ttsTokenizer = await AutoTokenizer.from_pretrained(config.TTS_ID);
+        ttsModel = await AutoModel.from_pretrained(config.TTS_ID, {
+          config: customConfig,
+          model_file_name: "language_model_q4f16", // Targets the Q4 file directly
+          quantized: false,
+          device: "webgpu",
+          dtype: "fp32",
+          use_external_data_format: true,
+        }).catch(() =>
+          AutoModel.from_pretrained(config.TTS_ID, {
+            config: customConfig,
+            model_file_name: "language_model_q4f16", // Targets the Q4 file directly
+            quantized: false,
+            device: "wasm",
+            dtype: "fp32",
+            use_external_data_format: true,
+          }),
+        );
+        console.log("TTS model loaded.", ttsModel, ttsTokenizer);
+      }
 
       const startTTS = Date.now();
-      // Voice cloning happens here by passing original audio as speaker_embeddings
-      const speech = await tts(translation_text, {
-        speaker_embeddings: audio,
+
+      // Chatterbox expects a specific prompt format for cloning
+      const inputs = await ttsTokenizer(translation_text);
+
+      // Generate with speaker embeddings
+      const output = await ttsModel.generate({
+        ...inputs,
+        speaker_embeddings: audio, // Original 5s Float32Array
         language: tgt,
+        max_new_tokens: 256, // Limit the "thinking" time
+        min_new_tokens: 10, // Prevents empty/too-short outputs
+        do_sample: false, // Use greedy decoding for consistency faster than sampling
+        early_stopping: true, // Stop when EOS token is generated
       });
+
       const latencyTTS = Date.now() - startTTS;
 
       self.postMessage({
         type: "audio",
-        audio: speech.audio,
-        sr: speech.sampling_rate,
+        audio: output.audio,
+        sr: output.sampling_rate,
         latency: latencyTTS,
         totalLatency: Date.now() - startSTT,
       });
