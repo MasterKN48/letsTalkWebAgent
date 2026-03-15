@@ -37,15 +37,6 @@ const MODELS = [
     artifactType: "archive",
   },
   {
-    id: MODEL_IDS.stt,
-    name: "Whisper Tiny ONNX",
-    url: "https://huggingface.co/onnx-community/whisper-tiny-ONNX/resolve/main/whisper-tiny-ONNX.tar.gz",
-    framework: LLMFramework.ONNX,
-    modality: ModelCategory.SpeechRecognition,
-    memoryRequirement: 105_000_000,
-    artifactType: "archive",
-  },
-  {
     id: MODEL_IDS.tts,
     name: "Piper TTS EN Lessac",
     url: "https://huggingface.co/runanywhere/vits-piper-en_US-lessac-medium/resolve/main/vits-piper-en_US-lessac-medium.tar.gz",
@@ -80,7 +71,7 @@ export async function initSDK() {
     await LlamaCPP.register();
     await ONNX.register();
     RunAnywhere.registerModels(MODELS);
-    
+
     // Scan OPFS for already downloaded models so the UI knows immediately
     await ModelManager.refreshDownloadStatus();
   })();
