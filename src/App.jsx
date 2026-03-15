@@ -74,11 +74,11 @@ function CustomAudioPlayer({ audioBlobUrl, isTarget = true }) {
         <audio ref={audioRef} src={audioBlobUrl} onEnded={handleEnded} onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
         <button onClick={togglePlay} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-brand-primary bg-white dark:bg-gray-800 shadow-sm" title="Play original audio">
           {isPlaying ? (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
             </svg>
           )}
@@ -97,11 +97,11 @@ function CustomAudioPlayer({ audioBlobUrl, isTarget = true }) {
       />
       <button onClick={togglePlay} className="w-9 h-9 rounded-full flex items-center justify-center text-brand-secondary cute-button bg-white dark:bg-gray-700 dark:text-brand-pink flex-shrink-0" aria-label="Toggle audio">
         {isPlaying ? (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
           </svg>
         ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 pl-0.5 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 pl-0.5 pointer-events-none" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
           </svg>
         )}
@@ -278,10 +278,8 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
                 ? { ...t, audioBlobUrl } 
                 : t
             ));
-
-            const player = new AudioPlayback({ sampleRate });
-            await player.play(audio, sampleRate);
-            player.dispose();
+            
+            setStage('idle');
           },
           onError: (err) => {
             console.error('Pipeline error:', err);
