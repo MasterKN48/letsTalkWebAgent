@@ -572,14 +572,24 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
               </svg>
             )}
           </button>
-          <div
-            className={`hidden sm:block text-xs font-semibold px-3 py-1 rounded-full transition-colors ${
-              isActive
-                ? "bg-brand-primary/20 text-brand-primary dark:bg-brand-primary/30 animate-pulse"
-                : "bg-brand-mint text-green-600 dark:bg-green-900/30 dark:text-green-400"
-            }`}
-          >
-            {isActive ? stage.toUpperCase().replace("_", " ") : "READY"}
+          <div className="flex items-center gap-2">
+            <div
+              className={`hidden sm:block text-xs font-semibold px-3 py-1 rounded-full transition-colors ${
+                isActive
+                  ? "bg-brand-primary/20 text-brand-primary dark:bg-brand-primary/30 animate-pulse"
+                  : "bg-brand-mint text-green-600 dark:bg-green-900/30 dark:text-green-400"
+              }`}
+            >
+              {isActive ? stage.toUpperCase().replace("_", " ") : "READY"}
+            </div>
+            {transcripts.length > 0 && (
+              <button
+                onClick={clearTranscripts}
+                className="cursor-pointer rounded-full bg-red-500 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-red-600 hover:scale-105 active:scale-95 z-50"
+              >
+                Clear History
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -857,14 +867,6 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
                 Source Transcript
               </h3>
-              {transcripts.length > 0 && (
-                <button
-                  onClick={clearTranscripts}
-                  className="cursor-pointer z-10 rounded-full bg-red-50 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-red-500 transition-colors hover:text-red-600 dark:bg-red-900/20 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  Clear All
-                </button>
-              )}
             </div>
             <div className="glass-card p-6 rounded-3xl min-h-[150px] flex flex-col gap-4 dark:bg-brand-dark-card dark:border-gray-800">
               {transcripts
