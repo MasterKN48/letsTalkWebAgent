@@ -35,11 +35,9 @@ function copyWasmPlugin() {
 
       // sherpa-onnx WASM
       const sherpaDir = path.join(onnxWasm, 'sherpa');
-      const sherpaOut = path.join(assetsDir, 'sherpa');
       if (fs.existsSync(sherpaDir)) {
-        fs.mkdirSync(sherpaOut, { recursive: true });
         for (const file of fs.readdirSync(sherpaDir)) {
-          fs.copyFileSync(path.join(sherpaDir, file), path.join(sherpaOut, file));
+          fs.copyFileSync(path.join(sherpaDir, file), path.join(assetsDir, file));
         }
       }
     },
@@ -67,7 +65,20 @@ export default defineConfig({
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+        screenshots: [
+          {
+            src: 'screenshot-desktop.png',
+            sizes: '1280x720',
+            type: 'image/png',
+            form_factor: 'wide'
+          },
+          {
+            src: 'screenshot-mobile.png',
+            sizes: '720x1280',
+            type: 'image/png'
+          }
         ],
       },
     }),
