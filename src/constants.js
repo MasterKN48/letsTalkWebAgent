@@ -1,12 +1,9 @@
 export const LANGUAGES = [
   { code: 'en', name: 'English', emoji: '🇺🇸' },
+  { code: 'hi', name: 'Hindi', emoji: '🇮🇳' },
   { code: 'es', name: 'Spanish', emoji: '🇪🇸' },
   { code: 'fr', name: 'French', emoji: '🇫🇷' },
   { code: 'de', name: 'German', emoji: '🇩🇪' },
-  { code: 'hi', name: 'Hindi', emoji: '🇮🇳' },
-  { code: 'ja', name: 'Japanese', emoji: '🇯🇵' },
-  { code: 'ko', name: 'Korean', emoji: '🇰🇷' },
-  { code: 'zh', name: 'Chinese', emoji: '🇨🇳' },
 ];
 
 export const METRICS = [
@@ -18,17 +15,12 @@ export const METRICS = [
 export const STAGE_LABELS = {
   idle: {
     text: "Ready to translate",
-    sub: "Tap the mic or upload an audio file",
+    sub: "Tap the mic to start listening",
   },
-  sdk_init: { text: "Loading SDK…", sub: "Initialising AI backends" },
-  downloading: {
-    text: "Downloading models…",
-    sub: "First run only — models are cached",
-  },
-  loading: { text: "Loading models…", sub: "Preparing voice pipeline" },
-  listening: { text: "Listening…", sub: "Speak now — stop when done" },
-  processing: { text: "Transcribing…", sub: "Running speech-to-text" },
-  generating: { text: "Translating…", sub: "LLM is generating the response" },
-  speaking: { text: "Playing audio…", sub: "Synthesising translated speech" },
-  error: { text: "Something went wrong", sub: "Tap to try again" },
+  listening: { text: "Listening...", sub: "Wait for speech detection" },
+  recording: { text: "Recording...", sub: "Speak naturally up to 5s" },
+  processing: { text: "Processing...", sub: "Speech-to-Text (Whisper)" },
+  generating: { text: "Translating...", sub: "Translation (OPUS-MT)" },
+  speaking: { text: "Speaking...", sub: "Text-to-Speech (Chatterbox)" },
+  error: { text: "Something went wrong", sub: "Tap the mic to try again" },
 };
