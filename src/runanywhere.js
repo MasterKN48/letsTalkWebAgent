@@ -4,6 +4,7 @@ import {
   ModelManager,
   ModelCategory,
   LLMFramework,
+  ModelStatus,
 } from "@runanywhere/web";
 import { LlamaCPP } from "@runanywhere/web-llamacpp";
 import { ONNX } from "@runanywhere/web-onnx";
@@ -79,8 +80,11 @@ export async function initSDK() {
     await LlamaCPP.register();
     await ONNX.register();
     RunAnywhere.registerModels(MODELS);
+    
+    // Scan OPFS for already downloaded models so the UI knows immediately
+    await ModelManager.refreshDownloadStatus();
   })();
   return _initPromise;
 }
 
-export { ModelManager, ModelCategory, MODEL_IDS };
+export { ModelManager, ModelCategory, MODEL_IDS, ModelStatus };

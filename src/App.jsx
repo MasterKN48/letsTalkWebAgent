@@ -9,7 +9,7 @@ import {
 } from "@runanywhere/web";
 import { VAD } from "@runanywhere/web-onnx";
 import { LANGUAGES } from "./constants";
-import { initSDK, ModelManager, ModelCategory, MODEL_IDS } from "./runanywhere";
+import { initSDK, ModelManager, ModelCategory, MODEL_IDS, ModelStatus } from "./runanywhere";
 
 // Pipeline stage labels shown in the UI
 const STAGE_LABELS = {
@@ -100,13 +100,13 @@ function CustomAudioPlayer({ audioBlobUrl, isTarget = true }) {
         />
         <button
           onClick={togglePlay}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-brand-primary bg-white dark:bg-gray-800 shadow-sm"
+          className="w-14 h-14 rounded-full flex items-center justify-center text-gray-400 hover:text-brand-primary bg-white dark:bg-gray-800 shadow-sm transition-all active:scale-95"
           title="Play original audio"
         >
           {isPlaying ? (
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 pointer-events-none"
+              className="h-12 w-12 pointer-events-none"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -119,7 +119,7 @@ function CustomAudioPlayer({ audioBlobUrl, isTarget = true }) {
           ) : (
             <svg
               xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 pointer-events-none"
+              className="h-12 w-12 pointer-events-none"
               viewBox="0 0 20 20"
               fill="currentColor"
             >
@@ -149,13 +149,13 @@ function CustomAudioPlayer({ audioBlobUrl, isTarget = true }) {
       />
       <button
         onClick={togglePlay}
-        className="w-9 h-9 rounded-full flex items-center justify-center text-brand-secondary cute-button bg-white dark:bg-gray-700 dark:text-brand-pink flex-shrink-0"
+        className="w-14 h-14 rounded-full flex items-center justify-center text-brand-secondary cute-button bg-white dark:bg-gray-700 dark:text-brand-pink flex-shrink-0"
         aria-label="Toggle audio"
       >
         {isPlaying ? (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6 pointer-events-none"
+            className="h-12 w-12 pointer-events-none"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
@@ -168,7 +168,7 @@ function CustomAudioPlayer({ audioBlobUrl, isTarget = true }) {
         ) : (
           <svg
             xmlns="http://www.w3.org/2000/svg"
-            className="h-6 w-6 pl-0.5 pointer-events-none"
+            className="h-12 w-12 pl-0.5 pointer-events-none"
             viewBox="0 0 20 20"
             fill="currentColor"
           >
@@ -260,15 +260,18 @@ export default function App() {
 
   /* ─── Ensure model is loaded for a given category ───────── */
   const ensureModelLoaded = useCallback(async (category, modelId) => {
-    if (ModelManager.getLoadedModel(category)) return;
     const models = ModelManager.getModels().filter(
       (m) => m.modality === category,
     );
     const id = modelId ?? models[0]?.id;
     if (!id) throw new Error(`No model registered for category: ${category}`);
 
-    // Check if already in OPFS to avoid flashing "downloading" state
-    const isDownloaded = await ModelManager.isModelDownloaded(id);
+    if (ModelManager.getLoadedModelId(category) === id) return;
+
+    // Check registry status (refreshed in initSDK)
+    const model = ModelManager.getModels().find((m) => m.id === id);
+    const isDownloaded = model?.status === ModelStatus.Downloaded;
+
     if (!isDownloaded) {
       setStage("downloading");
       await ModelManager.downloadModel(id);
@@ -601,14 +604,6 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
             >
               {isActive ? stage.toUpperCase().replace("_", " ") : "READY"}
             </div>
-            {transcripts.length > 0 && (
-              <button
-                onClick={clearTranscripts}
-                className="cursor-pointer rounded-full bg-red-500 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm transition-all hover:bg-red-600 hover:scale-105 active:scale-95 z-50"
-              >
-                Clear History
-              </button>
-            )}
           </div>
         </div>
       </header>
@@ -886,6 +881,14 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">
                 Source Transcript
               </h3>
+              {transcripts.length > 0 && (
+                <button
+                  onClick={clearTranscripts}
+                  className="cursor-pointer rounded-full bg-red-500/10 hover:bg-red-500 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-500 hover:text-white transition-all active:scale-95"
+                >
+                  Clear All
+                </button>
+              )}
             </div>
             <div className="glass-card p-6 rounded-3xl min-h-[150px] flex flex-col gap-4 dark:bg-brand-dark-card dark:border-gray-800">
               {transcripts
@@ -903,7 +906,7 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
                         {t.text}
                       </p>
                     </div>
-                    {t.audioBlobUrl && t.text !== "…" && (
+                    {t.audioBlobUrl && (
                       <CustomAudioPlayer
                         audioBlobUrl={t.audioBlobUrl}
                         isTarget={false}
