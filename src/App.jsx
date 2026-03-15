@@ -217,7 +217,6 @@ export default function App() {
   const [audioLevel, setAudioLevel] = useState(0);
   const [downloadPct, setDownloadPct] = useState({}); // { modelId: 0-100 }
   const [transcripts, setTranscripts] = useState([]); // { id, type, text, liveText, time }
-  const [liveResponse, setLiveResponse] = useState(""); // streaming LLM response
   const [metrics, setMetrics] = useState({
     latency: "--",
     accuracy: "--",
@@ -282,17 +281,18 @@ export default function App() {
   /* ─── Ensure SDK + models ready (shared by mic & upload) ── */
   const ensureReady = useCallback(async () => {
     setError(null);
-    setLiveResponse("");
     activeRef.current = true;
 
     setStage("sdk_init");
     await initSDK();
 
     setStage("downloading");
-    await ensureModelLoaded(ModelCategory.Audio, MODEL_IDS.vad);
-    await ensureModelLoaded(ModelCategory.SpeechRecognition, MODEL_IDS.stt);
-    await ensureModelLoaded(ModelCategory.Language, MODEL_IDS.llm);
-    await ensureModelLoaded(ModelCategory.SpeechSynthesis, MODEL_IDS.tts);
+    await Promise.all([
+      ensureModelLoaded(ModelCategory.Audio, MODEL_IDS.vad),
+      ensureModelLoaded(ModelCategory.SpeechRecognition, MODEL_IDS.stt),
+      ensureModelLoaded(ModelCategory.Language, MODEL_IDS.llm),
+      ensureModelLoaded(ModelCategory.SpeechSynthesis, MODEL_IDS.tts),
+    ]);
 
     if (!pipelineRef.current) pipelineRef.current = new VoicePipeline();
   }, [ensureModelLoaded]);
@@ -347,18 +347,34 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
               );
             },
             onResponseToken: (_, acc) => {
-              if (!firstToken) firstToken = Date.now();
-              setLiveResponse(acc);
+              if (!firstToken) {
+                firstToken = Date.now();
+                finalTargetId = Date.now() + 1;
+                setTranscripts((prev) => [
+                  ...prev,
+                  {
+                    id: finalTargetId,
+                    type: "target",
+                    text: acc,
+                    time: formatTime(),
+                    isStreaming: true,
+                  },
+                ]);
+              } else {
+                setTranscripts((prev) =>
+                  prev.map((t) =>
+                    t.id === finalTargetId ? { ...t, text: acc } : t,
+                  ),
+                );
+              }
             },
             onResponseComplete: (text) => {
-              finalTargetId = Date.now() + 1;
+              setTranscripts((prev) =>
+                prev.map((t) =>
+                  t.id === finalTargetId ? { ...t, text, isStreaming: false } : t,
+                ),
+              );
 
-              setTranscripts((prev) => [
-                ...prev,
-                { id: finalTargetId, type: "target", text, time: formatTime() },
-              ]);
-
-              setLiveResponse("");
               const latency = Date.now() - turnStart;
               setMetrics({
                 latency: `${latency}ms`,
@@ -394,7 +410,6 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
         console.error("Voice pipeline error:", err);
         setError(err.message);
         setStage("error");
-        setLiveResponse("");
         return;
       }
 
@@ -490,7 +505,6 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
     activeRef.current = false;
     setStage("idle");
     setAudioLevel(0);
-    setLiveResponse("");
   }, []);
 
   const toggleRecording = useCallback(() => {
@@ -503,7 +517,6 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
 
   const clearTranscripts = useCallback(() => {
     setTranscripts([]);
-    setLiveResponse("");
     setMetrics({ latency: "--", accuracy: "--", speed: "--" });
   }, []);
 
@@ -920,20 +933,7 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
               Translated Audio
             </h3>
             <div className="glass-card translated-audio-card p-6 rounded-3xl min-h-[150px] flex flex-col gap-4">
-              {/* Live streaming response */}
-              {liveResponse && (
-                <div className="animate-fade-in-up min-w-0">
-                  <span className="text-[10px] text-gray-400 block mb-1">
-                    live
-                  </span>
-                  <p className="text-lg font-bold text-brand-secondary dark:text-brand-pink break-words whitespace-pre-wrap">
-                    {liveResponse}
-                    <span className="inline-block w-0.5 h-5 bg-brand-primary ml-0.5 animate-pulse align-middle" />
-                  </p>
-                </div>
-              )}
-
-              {/* Completed translations */}
+              {/* Completed or Streaming translations */}
               {transcripts
                 .filter((t) => t.type === "target")
                 .map((t) => (
@@ -943,10 +943,13 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
                   >
                     <div className="flex-1 min-w-0">
                       <span className="text-[10px] text-gray-400 block mb-1">
-                        {t.time}
+                        {t.isStreaming ? "live" : t.time}
                       </span>
                       <p className="text-lg font-bold text-brand-secondary dark:text-brand-pink break-words whitespace-pre-wrap">
                         {t.text}
+                        {t.isStreaming && (
+                          <span className="inline-block w-0.5 h-5 bg-brand-primary ml-0.5 animate-pulse align-middle" />
+                        )}
                       </p>
                       {t.audioBlobUrl && (
                         <CustomAudioPlayer
@@ -958,8 +961,7 @@ Reply with ONLY the translated text in ${tgtLangName}. No explanations, no label
                   </div>
                 ))}
 
-              {transcripts.filter((t) => t.type === "target").length === 0 &&
-                !liveResponse && (
+              {transcripts.filter((t) => t.type === "target").length === 0 && (
                   <p className="text-gray-300 dark:text-gray-600 text-sm italic">
                     Translated text and audio will appear here…
                   </p>
