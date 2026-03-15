@@ -267,8 +267,14 @@ export default function App() {
     );
     const id = modelId ?? models[0]?.id;
     if (!id) throw new Error(`No model registered for category: ${category}`);
-    setStage("downloading");
-    await ModelManager.downloadModel(id);
+
+    // Check if already in OPFS to avoid flashing "downloading" state
+    const isDownloaded = await ModelManager.isModelDownloaded(id);
+    if (!isDownloaded) {
+      setStage("downloading");
+      await ModelManager.downloadModel(id);
+    }
+
     setStage("loading");
     await ModelManager.loadModel(id, { coexist: true });
   }, []);
