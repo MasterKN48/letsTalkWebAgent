@@ -1,5 +1,7 @@
 # 🌐 Let'sTalk.live
 
+**[🔴 Live Demo](https://MasterKN48.github.io/letsTalkWebAgent/)**
+
 > Real-time AI voice translation with on-device speech-to-text, LLM translation, and neural text-to-speech — running entirely in your browser via WebAssembly. No server, no API key, full privacy.
 
 ---
