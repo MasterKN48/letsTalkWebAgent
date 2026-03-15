@@ -47,6 +47,7 @@ function copyWasmPlugin() {
 }
 
 export default defineConfig({
+  base: '/letsTalkWebAgent/',
   plugins: [
     react(),
     copyWasmPlugin(),
