@@ -80,16 +80,25 @@ Open **http://localhost:5173** and tap the microphone button.
 WebVoiceAgent/
 ├── public/                  # Static assets (favicon, PWA icons)
 ├── src/
-│   ├── App.jsx              # Main UI + full voice pipeline logic
-│   ├── runanywhere.js       # SDK init, model registration (reads .env)
-│   ├── constants.js         # Language list, metrics defaults
-│   ├── index.css            # Tailwind + custom dark mode / glassmorphism CSS
+│   ├── components/          # Reusable UI components
+│   │   ├── Header.jsx       # App bar, theme, and status
+│   │   ├── RecordingHub.jsx # Mic & Upload interaction center
+│   │   ├── ConfigPanel.jsx  # Language & download settings
+│   │   ├── SourceTranscript.jsx # User speech transcription
+│   │   ├── TranslatedAudio.jsx # Translation playback & text
+│   │   ├── MetricsDisplay.jsx # Latency & speed metrics
+│   │   └── CustomAudioPlayer.jsx # Premium player with progress
+│   ├── utils/               # Logic helpers
+│   │   ├── audio.js         # WAV encoding utilities
+│   │   └── time.js          # Timestamp formatting
+│   ├── App.jsx              # Main orchestrator (state & pipeline)
+│   ├── runanywhere.js       # SDK init & model registration
+│   ├── constants.js         # Language lists & stage labels
+│   ├── index.css            # Tailwind + custom brand styles
 │   └── main.jsx             # React entry point
-├── .env                     # Model IDs and LLM settings (see below)
-├── vite.config.js           # Vite + PWA + WASM + COOP/COEP config
-├── tailwind.config.js       # Custom brand colours, dark mode class strategy
-├── index.html               # SEO meta tags, OG tags, theme-color
-└── RunanywhereGuide.md      # Full RunAnywhere Web SDK reference docs
+├── .env                     # Model IDs & LLM settings
+├── vite.config.js           # Vite + PWA + WASM config
+└── RunanywhereGuide.md      # SDK reference docs
 ```
 
 ---
@@ -137,27 +146,32 @@ It exports:
 - `ModelCategory` — enum for VAD, STT, LLM, TTS
 - `MODEL_IDS` — model IDs read from `.env`
 
-### `src/App.jsx` — UI + Voice Pipeline
+### `src/App.jsx` — Orchestration
 
-The main component handles the full pipeline state machine:
+The main `App` component acts as the central state machine and orchestrator. It uses specific components from `src/components` to keep the UI modular and clean.
 
 | Stage | Meaning |
 |---|---|
 | `idle` | Waiting for user to tap mic |
 | `sdk_init` | Initialising WASM backends |
-| `downloading` | Downloading model files from HuggingFace |
-| `loading` | Loading models into WASM memory |
+| `downloading` | Downloading model files (cached in OPFS) |
+| `loading` | Loading models into memory |
 | `listening` | Mic active, VAD processing audio |
 | `processing` | Speech segment detected, running STT |
-| `generating` | LLM generating translation (tokens streamed live) |
+| `generating` | LLM generating translation |
 | `speaking` | TTS audio playing |
-| `error` | Something went wrong (message shown, tap to retry) |
+| `error` | Error state shown in RecordingHub |
 
-Key hooks used:
-- `AudioCapture` — microphone capture at 16 kHz
-- `VAD.onSpeechActivity()` — fires when user stops speaking
-- `VoicePipeline.processTurn()` — runs STT → LLM → TTS
-- `EventBus.shared.on('model.downloadProgress')` — live download %
+### `src/components/` — UI Modules
+
+The UI is broken down into small, focused components:
+
+- **`RecordingHub`**: Handles microphone capture, file uploads, and status animations.
+- **`SourceTranscript`**: Manages the list of source speech with quick playback.
+- **`TranslatedAudio`**: Displays translated text and handles the target audio playback with a progress bar.
+- **`ConfigPanel`**: Manages source/target languages and voice cloning preferences.
+- **`CustomAudioPlayer`**: A premium audio interaction module used for both source and target playback.
+- **`MetricsDisplay`**: Displays latency, accuracy, and speed at a glance.
 
 ### `vite.config.js` — Build Configuration
 
