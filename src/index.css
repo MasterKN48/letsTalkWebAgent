@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #4A4A4A;
+  background-color: #FAFAFA;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #FFF5F7 0%, #F5F7FF 100%);
+  transition: background 0.3s;
+}
+
+.dark body {
+  background: #0E0E12 !important;
+}
+
+.dark {
+  background: #0E0E12;
+  color: #e5e7eb;
+}
+
+#root {
+  width: 100%;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  transition: background 0.3s, border-color 0.3s;
+}
+
+.dark .glass-card {
+  background: #1A1A24 !important;
+  border-color: rgba(255,255,255,0.07) !important;
+  box-shadow: 0 8px 32px 0 rgba(0,0,0,0.4);
+}
+
+.cute-shadow {
+  box-shadow: 0 10px 25px -5px rgba(255, 105, 180, 0.1), 0 8px 10px -6px rgba(255, 105, 180, 0.1);
+}
+
+.cute-button {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.cute-button:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+
+.cute-button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* Translated audio card add a subtle pink tint in light, dark bg in dark */
+.translated-audio-card {
+  background: linear-gradient(135deg, rgba(230, 230, 250, 0.4) 0%, rgba(255, 209, 220, 0.4) 100%);
+}
+
+.dark .translated-audio-card {
+  background: #1A1A24 !important;
+}
