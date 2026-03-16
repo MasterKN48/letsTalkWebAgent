@@ -38,6 +38,7 @@ export default function App() {
     audioLevel,
     setAudioLevel,
     downloadPct,
+    setDownloadPct,
     transcripts,
     addTranscript,
     updateTranscript,
@@ -83,21 +84,47 @@ export default function App() {
       console.log("Worker message:", e.data);
       if (type === "status") {
         setStage(status);
+      } else if (type === "text_src_partial") {
+        const id = lastSourceIdRef.current;
+        if (id) {
+          updateTranscript(id, { text, isStreaming: true });
+        }
       } else if (type === "text_src") {
         const id = lastSourceIdRef.current;
         if (id) {
-          updateTranscript(id, { text });
+          updateTranscript(id, { text, isStreaming: false });
+        }
+      } else if (type === "text_tgt_partial") {
+        const id = lastTargetIdRef.current;
+        if (id) {
+          updateTranscript(id, { text, isStreaming: true });
+        } else {
+          // Create a new target transcript if one doesn't exist yet
+          const newId = Date.now();
+          lastTargetIdRef.current = newId;
+          addTranscript({
+            id: newId,
+            type: "target",
+            text,
+            time: formatTime(),
+            isStreaming: true,
+          });
         }
       } else if (type === "text_tgt") {
-        const id = Date.now();
-        lastTargetIdRef.current = id;
-        addTranscript({
-          id,
-          type: "target",
-          text,
-          time: formatTime(),
-          isStreaming: false,
-        });
+        const id = lastTargetIdRef.current;
+        if (id) {
+          updateTranscript(id, { text, isStreaming: false });
+        } else {
+          const newId = Date.now();
+          lastTargetIdRef.current = newId;
+          addTranscript({
+            id: newId,
+            type: "target",
+            text,
+            time: formatTime(),
+            isStreaming: false,
+          });
+        }
       } else if (type === "audio") {
         const id = lastTargetIdRef.current;
         if (id) {
@@ -111,6 +138,9 @@ export default function App() {
             speed: `${metrics.speed}`, // Keep previous or calculate anew
           });
         }
+      } else if (type === "download_progress") {
+        const { file, progress } = e.data;
+        setDownloadPct(file, parseFloat(progress));
       } else if (type === "error") {
         console.error("Worker error:", workerError);
         setError(workerError);
@@ -127,6 +157,7 @@ export default function App() {
     setStage,
     setError,
     setMetrics,
+    setDownloadPct,
     metrics.speed,
   ]);
 
@@ -136,6 +167,7 @@ export default function App() {
       onSpeechStart: () => {
         const id = Date.now();
         lastSourceIdRef.current = id;
+        lastTargetIdRef.current = null; // Reset target ref for new segment
         // Placeholder for source transcript
         addTranscript({
           id,
@@ -143,11 +175,21 @@ export default function App() {
           text: "...",
           time: formatTime(),
           audioBlobUrl: null,
+          isStreaming: true,
         });
         setStage("recording");
+        workerRef.current.postMessage({ type: "reset_stream" });
+      },
+      onChunk: (chunk) => {
+        workerRef.current.postMessage({
+          type: "stream",
+          audio: chunk,
+          src: sourceLang,
+          tgt: targetLang,
+        });
       },
       onSpeechEnd: (audio) => {
-        // Send to worker
+        // Send to worker for final process (synthesis)
         setStage("processing");
         workerRef.current.postMessage({
           type: "process",
@@ -160,7 +202,7 @@ export default function App() {
         const id = lastSourceIdRef.current;
         if (id) {
           const audioBlobUrl = URL.createObjectURL(encodeWAV(audio, 16000));
-          updateTranscript(id, { audioBlobUrl });
+          updateTranscript(id, { audioBlobUrl, isStreaming: false });
         }
       },
       onFrameProcessed: (level) => {

@@ -3,6 +3,10 @@ export const LANGUAGES = [
   { code: 'hi', name: 'Hindi', emoji: '🇮🇳' },
   { code: 'es', name: 'Spanish', emoji: '🇪🇸' },
   { code: 'fr', name: 'French', emoji: '🇫🇷' },
+  { code: 'ja', name: 'Japanese', emoji: '🇯🇵' },
+  { code: 'zh', name: 'Chinese', emoji: '🇨🇳' },
+  { code: 'pt', name: 'Portuguese', emoji: '🇧🇷' },
+  { code: 'it', name: 'Italian', emoji: '🇮🇹' },
   { code: 'de', name: 'German', emoji: '🇩🇪' },
 ];
 
@@ -21,6 +25,6 @@ export const STAGE_LABELS = {
   recording: { text: "Recording...", sub: "Speak naturally up to 5s" },
   processing: { text: "Processing...", sub: "Speech-to-Text (Whisper)" },
   generating: { text: "Translating...", sub: "Translation (OPUS-MT)" },
-  speaking: { text: "Speaking...", sub: "Text-to-Speech (Chatterbox)" },
+  speaking: { text: "Speaking...", sub: "Text-to-Speech (Kokoro)" },
   error: { text: "Something went wrong", sub: "Tap the mic to try again" },
 };

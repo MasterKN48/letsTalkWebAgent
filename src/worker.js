@@ -1,10 +1,5 @@
-import {
-  pipeline,
-  env,
-  AutoModel,
-  AutoTokenizer,
-  PretrainedConfig,
-} from "@huggingface/transformers";
+import { pipeline, env } from "@huggingface/transformers";
+import { KokoroTTS } from "kokoro-js";
 
 const config = {
   STT_ID: import.meta.env.VITE_MODEL_STT_ID,
@@ -18,18 +13,69 @@ const config = {
 env.allowLocalModels = false;
 env.useBrowserCache = config.USE_CACHE;
 
-let stt, translator, ttsModel, ttsTokenizer;
+let stt, translator, tts;
+let streamingBuffer = new Float32Array(0);
+
+// Helper to concatenate Float32Arrays
+function concatFloat32Arrays(a, b) {
+  const result = new Float32Array(a.length + b.length);
+  result.set(a);
+  result.set(b, a.length);
+  return result;
+}
 
 self.onmessage = async (e) => {
   const { type, audio, src, tgt } = e.data;
 
+  if (type === "reset_stream") {
+    streamingBuffer = new Float32Array(0);
+    self.postMessage({ type: "status", status: "idle" });
+    return;
+  }
+
+  if (type === "stream") {
+    if (!audio) return;
+    streamingBuffer = concatFloat32Arrays(streamingBuffer, audio);
+
+    try {
+      stt ??= await pipeline("automatic-speech-recognition", config.STT_ID, {
+        device: "wasm",
+        quantized: true,
+      });
+
+      // Run STT on the current buffer
+      const { text } = await stt(streamingBuffer, {
+        language: src,
+        task: "transcribe",
+      });
+
+      if (text && text.trim().length > 0) {
+        self.postMessage({ type: "text_src_partial", text });
+
+        // Optional: Incremental translation
+        const modelId = `${config.TRANSLATION_PREFIX}-${src}-${tgt}`;
+        if (!translator || translator.model_id !== modelId) {
+          translator = await pipeline("translation", modelId, {
+            device: "wasm",
+            quantized: true,
+          });
+        }
+        const [{ translation_text }] = await translator(text);
+        self.postMessage({ type: "text_tgt_partial", text: translation_text });
+      }
+    } catch (err) {
+      console.error("Streaming error:", err);
+    }
+  }
+
   if (type === "process") {
     try {
+      const finalAudio = audio || streamingBuffer;
       // 1. STT (Whisper)
       self.postMessage({
         type: "status",
         status: "processing",
-        message: "Transcribing speech...",
+        message: "Finalizing transcription...",
       });
       console.log("Starting STT...", config.STT_ID);
       stt ??= await pipeline("automatic-speech-recognition", config.STT_ID, {
@@ -39,7 +85,7 @@ self.onmessage = async (e) => {
       console.log("STT model loaded.");
 
       const startSTT = Date.now();
-      const { text } = await stt(audio, {
+      const { text } = await stt(finalAudio, {
         language: src,
         task: "transcribe",
       });
@@ -57,7 +103,8 @@ self.onmessage = async (e) => {
         status: "generating",
         message: "Translating...",
       });
-      const modelId = `${config.TRANSLATION_PREFIX}-${src}-${tgt}`;
+
+      const modelId = `${config.TRANSLATION_PREFIX}-${src}-${tgt === "ja" ? "jap" : tgt}`;
       console.log("Loading translator...", modelId);
       if (!translator || translator.model_id !== modelId) {
         translator = await pipeline("translation", modelId, {
@@ -76,69 +123,57 @@ self.onmessage = async (e) => {
         latency: latencyTrans,
       });
 
-      // 3. TTS (Chatterbox)
+      // 3. TTS (KokoroTTS)
       self.postMessage({
         type: "status",
         status: "speaking",
         message: "Synthesizing voice...",
       });
 
-      if (!ttsModel || !ttsTokenizer) {
-        console.log("Loading TTS model...");
-        // 3. Create a manual config to satisfy the loader
-        const customConfig = new PretrainedConfig({
-          model_type: "llama", // Chatterbox is built on a 0.5B Llama-based architecture
-          is_encoder_decoder: false,
-        });
-        // console.log("Loading TTS model...", customConfig);
-        ttsTokenizer = await AutoTokenizer.from_pretrained(config.TTS_ID);
-        ttsModel = await AutoModel.from_pretrained(config.TTS_ID, {
-          config: customConfig,
-          model_file_name: "language_model_q4f16", // Targets the Q4 file directly
-          quantized: false,
+      if (!tts) {
+        console.log("Loading KokoroTTS model...");
+        tts = await KokoroTTS.from_pretrained(config.TTS_ID, {
+          dtype: "q8",
           device: "webgpu",
-          dtype: "fp32",
-          use_external_data_format: true,
-        }).catch(() =>
-          AutoModel.from_pretrained(config.TTS_ID, {
-            config: customConfig,
-            model_file_name: "language_model_q4f16", // Targets the Q4 file directly
-            quantized: false,
-            device: "wasm",
-            dtype: "fp32",
-            use_external_data_format: true,
-          }),
-        );
-        console.log("TTS model loaded.", ttsModel, ttsTokenizer);
+        });
+        console.log("KokoroTTS model loaded.");
       }
 
       const startTTS = Date.now();
 
-      // Chatterbox expects a specific prompt format for cloning
-      const inputs = await ttsTokenizer(translation_text);
+      // Dynamic Kokoro language selection (using a single global voice: af_heart)
+      const langMap = {
+        en: "a", // English (American)
+        hi: "h", // Hindi
+        fr: "f", // French
+        es: "e", // Spanish
+        ja: "j", // Japanese
+        zh: "z", // Mandarin Chinese
+        pt: "p", // Portuguese (Brazilian)
+        it: "i", // Italian
+      };
 
-      // Generate with speaker embeddings
-      const output = await ttsModel.generate({
-        ...inputs,
-        speaker_embeddings: audio, // Original 5s Float32Array
-        language: tgt,
-        max_new_tokens: 256, // Limit the "thinking" time
-        min_new_tokens: 10, // Prevents empty/too-short outputs
-        do_sample: false, // Use greedy decoding for consistency faster than sampling
-        early_stopping: true, // Stop when EOS token is generated
-      });
+      const voice = "af_heart";
+      const lang = langMap[tgt] || "a";
 
+      console.log(
+        `Using Kokoro voice: ${voice}, lang: ${lang} for language: ${tgt}`,
+      );
+
+      const ttsOutput = await tts.generate(translation_text, { voice, lang });
       const latencyTTS = Date.now() - startTTS;
 
       self.postMessage({
         type: "audio",
-        audio: output.audio,
-        sr: output.sampling_rate,
+        audio: ttsOutput.audio,
+        sr: ttsOutput.sampling_rate,
         latency: latencyTTS,
         totalLatency: Date.now() - startSTT,
       });
 
       self.postMessage({ type: "status", status: "idle" });
+      // Reset after full process
+      streamingBuffer = new Float32Array(0);
     } catch (error) {
       console.error("Worker error:", error);
       self.postMessage({ type: "error", error: error.message });
